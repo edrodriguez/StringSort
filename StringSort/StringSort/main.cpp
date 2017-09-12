@@ -7,14 +7,15 @@
 
 using namespace std;
 
-void readFile(ifstream& inputFile, int startPosition, int endPosition, vector<string> *words) {
+int comparissons1, comparissons2, totalComparissons;
+
+void readFile(ifstream& inputFile, int endPosition, vector<string> *words) {
 	string word;
 
-	for (int i = startPosition; i >= 0 && i < endPosition; i = inputFile.tellg()) {
+	for (int i = 0; i >= 0 && i < endPosition; i = inputFile.tellg()) {
 		getline(inputFile, word);
 		words->push_back(word);
 	}
-	inputFile.close();
 }
 
 bool isFirstWordSmaller(string word1, string word2) {
@@ -42,93 +43,149 @@ bool isFirstWordSmaller(string word1, string word2) {
 		return false;
 }
 
-void merge(vector<string> *words, int startPosition, int midPoint, int endPosition) {
+void merge(vector<string> *words, int startPosition, int midPoint, int endPosition, int *numComparissons) {
 
-	vector<string> firstHalf(&(*words)[0], &(*words)[midPoint - startPosition + 1]);
-	vector<string> secondHalf(&(*words)[midPoint + 1], &(*words)[words->size() - 1]);
+	vector<string> firstHalf, secondHalf;
 
-	int firstHalfIndex, secondHalfIndex = 0;
+	int firstHalfIndex = 0;
+	int secondHalfIndex = 0;
+	int wordsIndex = startPosition;
 
-	while (firstHalfIndex <= firstHalf.size() && secondHalfIndex <= secondHalf.size()) {
+	int firstPartCopyIndex = midPoint - startPosition + 1;
+	int secondPartCopyIndex = endPosition - midPoint;
+
+	for (int i = 0; i < firstPartCopyIndex; i++) {
+		firstHalf.push_back((*words)[startPosition + i]);
+	}
+	for (int i = 0; i < secondPartCopyIndex; i++) {
+		secondHalf.push_back((*words)[midPoint + 1 + i]);
+	}
+
+	while (firstHalfIndex < firstHalf.size() && secondHalfIndex < secondHalf.size()) {
 		if (isFirstWordSmaller(firstHalf[firstHalfIndex], secondHalf[secondHalfIndex])) { //first word goes first
-			words->push_back(firstHalf[firstHalfIndex]);
+			(*words)[wordsIndex] = firstHalf[firstHalfIndex];
 			++firstHalfIndex;
 		}
 		else { //second word goes first
-			words->push_back(secondHalf[secondHalfIndex]);
+			(*words)[wordsIndex] = secondHalf[secondHalfIndex];
 			++secondHalfIndex;
 		}
+		++(*numComparissons);
+		++wordsIndex;
 	}
 
 	//move remaining of first part if any
-	for (int i = firstHalfIndex; i <= midPoint; ++i) {
-		words->push_back(firstHalf[firstHalfIndex]);
+	while (firstHalfIndex < firstPartCopyIndex) {
+		(*words)[wordsIndex] = firstHalf[firstHalfIndex];
+		++firstHalfIndex;
+		++wordsIndex;
 	}
 
 	//move remaining of second part if any
-	for (int i = secondHalfIndex; i <= endPosition; ++i) {
-		words->push_back(secondHalf[secondHalfIndex]);
+	while (secondHalfIndex < secondPartCopyIndex) {
+		(*words)[wordsIndex] = secondHalf[secondHalfIndex];
+		++secondHalfIndex;
+		++wordsIndex;
 	}
 }
 
-void mergeSort(vector<string> *words, int startPosition, int endPosition) {
+void mergeSort(vector<string> *words, int startPosition, int endPosition, int *numComparissons) {
 
 	if (startPosition < endPosition) {
 		int midPoint = (startPosition + endPosition) / 2;
 
-		mergeSort(words, startPosition, midPoint);
-		mergeSort(words, midPoint + 1, endPosition);
+		mergeSort(words, startPosition, midPoint, numComparissons);
+		mergeSort(words, midPoint + 1, endPosition, numComparissons);
 
-		merge(words, startPosition, midPoint, endPosition);
+		merge(words, startPosition, midPoint, endPosition, numComparissons);
 	}
 }
+/*
+void sortAndTime(vector<string> *words, int startPosition, int endPosition,
+	double *secondsElapsed, int *numComparissons) {
 
-void finalMergeAndWrite(vector<string> firstWords, vector<string> secondWords) {
+	time_t startTime, endTime;
+	time(&startTime);
+	mergeSort(words, startPosition, endPosition, numComparissons);
+	time(&endTime);
+	*secondsElapsed = difftime(endTime, startTime);
+}*/
+
+void writeResults(vector<string> *sortedWords) {
 	ofstream outputFile;
 	int count = 0; //used to print first 50 words
 
+	//you make less comparissons of count if you print the 50 first words
+	//and then you iterate again to write to the file
+	cout << "First 50 sorted words:" << endl;
+	for (vector<string>::const_iterator it = sortedWords->begin(); it != sortedWords->end(); ++it) {
+		if (count < 50) {
+			cout << *it << endl;
+			++count;
+		}
+		if (count == 50)
+			break;
+	}
+
 	outputFile.open("SortedWords.txt");
-
 	if (outputFile.good()) {
-		while (!firstWords.empty() && !secondWords.empty()) {
-			if (isFirstWordSmaller(firstWords.front(),secondWords.front())) { //first word goes first
-				if (count < 50) 
-					cout << firstWords.front();
-				
-				outputFile << firstWords.front() << endl;
-				firstWords.erase(firstWords.begin());
-			}
-			else { //second word goes first
-				if (count < 50)
-					cout << secondWords.front();
-				
-				outputFile << secondWords.front() << endl;
-				secondWords.erase(secondWords.begin());
-			}
-		}
-
-		//print remaining of first vector
-		for (vector<string>::const_iterator it = firstWords.begin(); it != firstWords.end(); ++it) {
-			outputFile << *it << endl;
-		}
-
-		//print remaining of second vector
-		for (vector<string>::const_iterator it = secondWords.begin(); it != secondWords.end(); ++it) {
+		for (vector<string>::const_iterator it = sortedWords->begin(); it != sortedWords->end(); ++it) {
 			outputFile << *it << endl;
 		}
 	}
 	outputFile.close();
 }
 
+//merges the sorted vectors from the different threads and returns the time for merging
+double finalMerge(vector<string> *firstWords, vector<string> *secondWords,
+	vector<string> *sortedWords, int *numComparissons) {
+
+	time_t startTime, endTime;
+	double secondsElapsed;
+	vector<string>::const_iterator it1 = firstWords->begin();
+	vector<string>::const_iterator it2 = secondWords->begin();
+
+	time(&startTime);
+	while (it1 != firstWords->end() && it2 != secondWords->end()) {
+		if (isFirstWordSmaller(*it1, *it2)) { //first word goes first
+			sortedWords->push_back(*it1);
+			++it1;
+		}
+		else {
+			sortedWords->push_back(*it2);
+			++it2;
+		}
+		++(*numComparissons);
+	}
+	time(&endTime);
+	secondsElapsed = difftime(endTime, startTime);
+
+	//copy remaining of first vector
+	while (it1 != firstWords->end()) {
+		sortedWords->push_back(*it1);
+		++it1;
+	}
+
+	//copy remaining of second vector
+	while (it2 != secondWords->end()) {
+		sortedWords->push_back(*it2);
+		++it2;
+	}
+
+	return secondsElapsed;
+}
+
 int main() {	
 	ifstream inputFile;
-	vector<string> firstWords;
-	vector<string> secondWords;
-	clock_t begin, end;
-	double secondsElapsed;
+	vector<string> firstWords, secondWords, sortedWords;
+	time_t startTime, endTime;
+	double totalSeconds;
 	int comparissons1, comparissons2, totalComparissons;
+	comparissons1 = 0;
+	comparissons2 = 0;
+	totalComparissons = 0;
 
-	inputFile.open("TenWords.txt");
+	inputFile.open("MillionWords.txt");
 
 	if (inputFile.good()) {
 		// get length of file:
@@ -136,46 +193,30 @@ int main() {
 		int fileLength = inputFile.tellg();
 		inputFile.seekg(0, inputFile.beg);
 
-		//start timer for program
-		begin = clock();
+		//read file
+		readFile(inputFile, fileLength/2, &firstWords);
+		readFile(inputFile, fileLength, &secondWords);
+		inputFile.close();
 
-		//non parallel
-		readFile(inputFile, 0, fileLength, &firstWords);
-		mergeSort(&firstWords, 0, firstWords.size() - 1);
+		//start sorting each half in parallel
+		time(&startTime);
+		thread firstHalf(mergeSort, &firstWords, 0, firstWords.size() - 1, &comparissons1);
+		thread secondHalf(mergeSort, &secondWords, 0, secondWords.size() - 1, &comparissons2);
 
-
-
-		/*
-		*/
-		//read first half
-		//readFile(inputFile, 0, fileLength/2);
-
-		//start sorting first half and read second half parallel
-
-
-		//sort second half
+		// synchronize threads:
+		firstHalf.join();
+		secondHalf.join();
+		time(&endTime);
+		totalSeconds = difftime(endTime, startTime);
 
 		//merge
-
-		
-
-
-		//read the files in two parts
-		//thread firstHalf(readAndSortHalf, inputFile);
-		//thread secondHalf(readAndSortHalf, inputFile);
+		totalSeconds += finalMerge(&firstWords, &secondWords, &sortedWords, &totalComparissons);
 	}
 
-
-
-
-	// synchronize threads:
-	//first.join();                // pauses until first finishes
-	//second.join();               // pauses until second finishes
-
-	//stop timer and print time elapsed
-	end = clock();
-	secondsElapsed = double(end - begin) / CLOCKS_PER_SEC;
-	cout << "The total time elapsed is " << secondsElapsed << " seconds." << endl;
+	totalComparissons = totalComparissons + comparissons1 + comparissons2;
+	cout << "The number of comparissons used was " << totalComparissons << endl;
+	cout << "The total time elapsed is " << totalSeconds << " seconds." << endl;
+	writeResults(&sortedWords);
 
 	return 0;
 }
